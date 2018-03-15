@@ -1,0 +1,58 @@
+<?php
+
+use Drupal\Core\Config\Entity\ConfigEntityInterface;
+use Drupal\Core\Entity\BundleEntityFormBase;
+use Drupal\Core\Entity\ContentEntityForm;
+use Drupal\Core\Form\FormStateInterface;
+
+/**
+ * Implements hook_form_alter().
+ */
+function bundle_help_extra_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  $form_object = $form_state->getFormObject();
+  if ($form_object instanceof BundleEntityFormBase) {
+    $form['help_extra_text'] = [
+      '#title' => t('Extra help text before form'),
+      '#type' => 'text_format',
+    ];
+
+    // Default values from third party settings.
+    /** @var \Drupal\Core\Config\Entity\ConfigEntityBundleBase $entity */
+    $entity = $form_object->getEntity();
+    $default_values = $entity->getThirdPartySetting('bundle_help_extra', 'help_extra_text');
+    if (is_array($default_values)) {
+      $form['help_extra_text']['#default_value'] = $default_values['value'];
+      $form['help_extra_text']['#format'] = $default_values['format'];
+    }
+
+    $form['#entity_builders'][] = 'bundle_help_extra_config_entity_form_builder';
+  }
+
+  // Alter only for content entity form.
+  if ($form_object instanceof ContentEntityForm) {
+    /** @var \Drupal\Core\Entity\ContentEntityBase $entity */
+    $entity = $form_object->getEntity();
+
+    /** @var \Drupal\Core\Config\Entity\ConfigEntityBundleBase $type */
+    if ($entity->hasField('type')) {
+      $type = $entity->get('type')->entity;
+      $help_extra_text = $type->getThirdPartySetting('bundle_help_extra', 'help_extra_text');
+      if (is_array($help_extra_text) && isset($help_extra_text['value']) && isset($help_extra_text['format'])) {
+        $form['help_extra_text'] = [
+          '#type' => 'markup',
+          '#markup' => check_markup($help_extra_text['value'], $help_extra_text['format']),
+          '#weight' => -1,
+        ];
+      }
+    }
+  }
+}
+
+/**
+ * Entity build for config entity form with help extra text.
+ *
+ * @see bundle_help_extra_form_alter()
+ */
+function bundle_help_extra_config_entity_form_builder($entity_type, ConfigEntityInterface $bundle, &$form, FormStateInterface $form_state) {
+  $bundle->setThirdPartySetting('bundle_help_extra', 'help_extra_text', array_filter($form_state->getValue('help_extra_text')));
+}
